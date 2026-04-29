@@ -176,7 +176,7 @@ export default function App() {
 
     try {
       const searchText = query
-        ? `${query} jobs in India`
+        ? `${query} jobs in India ${expLevel} ${datePosted}`
         : "software developer jobs in India";
 
       const url = `https://jsearch.p.rapidapi.com/search?query=${encodeURIComponent(
