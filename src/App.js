@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useEffect } from "react";
 
 const CATEGORIES = ["All", "Technology", "Finance", "Marketing", "Design", "Sales", "Healthcare", "Education", "Engineering", "Data Science", "HR", "Legal"];
 const EXP_LEVELS = ["All", "Fresher", "1-3 years", "3-5 years", "5-10 years", "10+ years"];
@@ -61,7 +62,15 @@ const css = `
 .pill:hover{border-color:#818CF8;color:#818CF8}
 .pill.on{background:rgba(99,102,241,.15);border-color:#6366F1;color:#818CF8}
 .main{max-width:1080px;margin:0 auto;padding:22px 14px;display:grid;grid-template-columns:240px 1fr;gap:22px}
-@media(max-width:700px){.main{grid-template-columns:1fr}.sidebar{display:none}}
+@media(max-width:700px)
+{  
+#filterToggleBtn
+{
+    display: inline-block !important;
+}
+.main{grid-template-columns:1fr}
+.sidebar{display:none}
+}
 .sidebar{display:flex;flex-direction:column;gap:14px}
 .fbox{background:#1E293B;border-radius:14px;padding:16px}
 .fbox h3{font-size:11px;font-weight:600;color:#64748B;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
@@ -125,6 +134,7 @@ function Skel() {
 
 export default function App() {
   const [page, setPage] = useState(1);
+  const [showFilters, setShowFilters] = useState(false);
   const [query, setQuery] = useState("");
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -137,9 +147,25 @@ export default function App() {
   const [jobType, setJobType] = useState("All");
   const [datePosted, setDatePosted] = useState("Any time");
   const [sortBy, setSortBy] = useState("Relevance");
+  const [locationFilter, setLocationFilter] = useState("All");
+  const [locations, setLocations] = useState(["All"]);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 700);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 700);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
 
   const fetchJobs = async (pageNumber = 1) => {
     if (loading) return;
+
+    if (!query.trim()) {
+      setError("Please enter a job title or keyword");
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -173,7 +199,7 @@ export default function App() {
       const data = await res.json();
 
       console.log(data);
-      
+
       const parsed = (data.data || [])
         .filter((job) => {
           const country = (job.job_country || "").toLowerCase();
@@ -206,7 +232,7 @@ export default function App() {
           experience: "Not specified",
           category: "Technology",
           description: job.job_description?.slice(0, 160) + "...",
-          source: "Web",
+          source: getSource(job.job_apply_link),
           url: job.job_apply_link,
           posted: "Recently",
           skills: [],
@@ -214,11 +240,15 @@ export default function App() {
 
       if (!parsed.length) throw new Error("No jobs found");
 
+      const locs = ["All", ...new Set(parsed.map(j => j.location).filter(Boolean))];
+      setLocations(locs);
+
       setJobs(parsed);
       setPage(pageNumber);
 
       setProgress(100);
       setStatusMsg("");
+
     } catch (e) {
       setError(e.message || "Failed to fetch jobs");
     }
@@ -226,14 +256,22 @@ export default function App() {
     setLoading(false);
     setProgress(0);
   };
+
+
+  const getSource = (url) => {
+    if (!url) return "Web";
+    if (url.includes("linkedin")) return "LinkedIn";
+    if (url.includes("indeed")) return "Indeed";
+    if (url.includes("naukri")) return "Naukri";
+    if (url.includes("glassdoor")) return "Glassdoor";
+    return "Web";
+  };
+
   const filtered = jobs.filter(j => {
+    if (locationFilter !== "All" && j.location !== locationFilter) return false;
     if (category !== "All" && j.category !== category) return false;
     if (jobType !== "All" && j.type !== jobType) return false;
     return true;
-  }).sort((a, b) => {
-    if (sortBy !== "Newest") return 0;
-    const p = s => { if (!s) return 999; const n = parseInt(s); return isNaN(n) ? 999 : s.includes("hour") ? n / 24 : s.includes("week") ? n * 7 : s.includes("month") ? n * 30 : n; };
-    return p(a.posted) - p(b.posted);
   });
 
   return (
@@ -252,16 +290,41 @@ export default function App() {
             <button className="btn-s" onClick={() => fetchJobs(1)} disabled={loading}>
               {loading ? "Searching…" : "Search Jobs"}
             </button>
+
+
           </div>
+         
           <div className="pills">
             {JOB_TYPES.filter(t => t !== "All").map(t => (
               <div key={t} className={`pill${jobType === t ? " on" : ""}`} onClick={() => setJobType(jobType === t ? "All" : t)}>{t}</div>
             ))}
           </div>
+           <button
+            className="btn-s"
+            style={{ marginTop: "10px", display: "none" }}
+            onClick={() => setShowFilters(prev => !prev)}
+            id="filterToggleBtn"
+          >
+            {showFilters ? "Close Filters" : "Filters"}
+          </button>
         </div>
 
         <div className="main">
-          <div className="sidebar">
+          <div className="sidebar" style={{
+             display: isMobile ? (showFilters ? "flex" : "none") : "flex"
+          }}>
+            <div className="fbox">
+              <h3>Location</h3>
+              {locations.map(loc => (
+                <div
+                  key={loc}
+                  className={`fopt${locationFilter === loc ? " on" : ""}`}
+                  onClick={() => setLocationFilter(loc)}
+                >
+                  <div className="fdot" /> {loc}
+                </div>
+              ))}
+            </div>
             {[["Category", CATEGORIES, category, setCategory], ["Experience", EXP_LEVELS, expLevel, setExpLevel], ["Date Posted", DATE_POSTED, datePosted, setDatePosted]].map(([label, opts, val, set]) => (
               <div className="fbox" key={label}>
                 <h3>{label}</h3>
